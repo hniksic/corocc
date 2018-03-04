@@ -4,34 +4,39 @@ import cororun
 
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk as gtk
+from gi.repository import Gtk as gtk, GLib as glib
 
-def _setup_window(cont, label):
+async def get_input(label):
     w = gtk.Window()
     box = gtk.HBox()
     box.pack_start(gtk.Label(label), True, True, 0)
     entry = gtk.Entry()
     box.pack_start(entry, True, True, 0)
-    entry.connect('activate', lambda _: cont((w, entry.get_text())))
     w.add(box)
     w.show_all()
-
-async def get_input(label):
-    w, text = await cororun.suspend(_setup_window, label)
+    async with cororun.suspending() as cont:
+        entry.connect('activate', lambda _: cont(entry.get_text()))
+        w.connect('delete-event', lambda _: cont(None))
     w.destroy()
-    return text
-
-class Person:
-    def __repr__(self):
-        return "<{} name={!r} address={!r} occupation={!r}>".format(
-            type(self).__name__, self.name, self.address, self.occupation)
+    return cont.result
 
 async def show_person_data():
-    person = Person()
-    person.name = await get_input("name:")
-    person.address = await get_input("address:")
-    person.occupation = await get_input("occupation:")
-    print(person)
+    name = await get_input("Name:")
+    if name is None:
+        return
+    address = await get_input("Address:")
+    if address is None:
+        return
+    occupation = await get_input("Occupation:")
+    if occupation is None:
+        return
+    l = gtk.Label()
+    l.set_markup("<b>Name</b>\t\t{}\n<b>Address</b>\t\t{}\n<b>Occupation</b>\t{}"
+                 .format(*map(glib.markup_escape_text,
+                              (name, address, occupation))))
+    w = gtk.Window()
+    w.add(l)
+    w.show_all()
 
 def main():
     w = gtk.Window()

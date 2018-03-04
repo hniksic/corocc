@@ -7,6 +7,19 @@ def suspend(fn, *args):
     cont_retval = yield
     return cont_retval
 
+class suspending:
+    __slots__ = ('_cont',)
+
+    @types.coroutine
+    def __aenter__(self):
+        cont = yield
+        self._cont = cont
+        return cont
+
+    @types.coroutine
+    def __aexit__(self, *_):
+        self._cont.result = yield
+
 def _resume(coro, val):
     try:
         coro.send(val)
