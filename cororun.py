@@ -1,9 +1,9 @@
 import types
 
 @types.coroutine
-def suspend(fn):
+def suspend(fn, *args):
     cont = yield
-    fn(cont)
+    fn(cont, *args)
     cont_retval = yield
     return cont_retval
 

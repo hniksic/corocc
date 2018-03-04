@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+
+import cororun
+
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk as gtk
+
+def _setup_window(cont, label):
+    w = gtk.Window()
+    box = gtk.HBox()
+    box.pack_start(gtk.Label(label), True, True, 0)
+    entry = gtk.Entry()
+    box.pack_start(entry, True, True, 0)
+    entry.connect('activate', lambda _: cont((w, entry.get_text())))
+    w.add(box)
+    w.show_all()
+
+async def get_input(label):
+    w, text = await cororun.suspend(_setup_window, label)
+    w.destroy()
+    return text
+
+class Person:
+    def __repr__(self):
+        return "<{} name={!r} address={!r} occupation={!r}>".format(
+            type(self).__name__, self.name, self.address, self.occupation)
+
+async def show_person_data():
+    person = Person()
+    person.name = await get_input("name:")
+    person.address = await get_input("address:")
+    person.occupation = await get_input("occupation:")
+    print(person)
+
+def main():
+    w = gtk.Window()
+    btn = gtk.Button("Query person...")
+    btn.connect('clicked', lambda _: cororun.launch(show_person_data()))
+    w.add(btn)
+    w.connect('destroy', gtk.main_quit)
+    w.show_all()
+    gtk.main()
+
+main()
