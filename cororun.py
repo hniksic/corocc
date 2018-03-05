@@ -23,34 +23,34 @@ class suspending:
 def _resume(coro, val):
     try:
         coro.send(val)
-        return False
-    except StopIteration:
         return True
+    except StopIteration:
+        return False
 
 _unset = object()
 
+def _step(coro, contval):
+    while True:
+        if not _resume(coro, contval):
+            return
+        contval = _unset
+        def cont(val=None):
+            nonlocal contval
+            if contval is not _unset:
+                raise RuntimeError("coroutine already resumed")
+            if in_step:
+                # cont() invoked from inside suspend - just continue
+                # with the current step
+                contval = val
+            else:
+                # resume the coroutine and continue stepping
+                _step(coro, val)
+        in_step = True
+        if not _resume(coro, cont):
+            raise AssertionError("suspend didn't yield")
+        if contval is _unset:
+            in_step = False
+            return
+
 def launch(coro):
-    def step(contval):
-        while True:
-            if _resume(coro, contval):
-                break
-            contval = _unset
-            def cont(val=None):
-                nonlocal contval
-                if contval is not _unset:
-                    raise RuntimeError("coroutine already resumed")
-                if in_step:
-                    # cont() invoked from inside suspend_coroutine - just
-                    # save the value and let drive_gen pick it up
-                    contval = val
-                else:
-                    # resume the driver so it can resume the coroutine
-                    step(val)
-            in_step = True
-            if _resume(coro, cont):
-                raise AssertionError("suspend_coroutine stopped")
-            if contval is _unset:
-                in_step = False
-                break
-    # start executing the coroutine
-    step(None)
+    _step(coro, None)
