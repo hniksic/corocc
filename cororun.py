@@ -30,30 +30,27 @@ def _resume(coro, val):
 _unset = object()
 
 def launch(coro):
-    def driver_gen():
-        # start executing the coroutine
-        coro.send(None)
+    def step(contval):
         while True:
+            if _resume(coro, contval):
+                break
             contval = _unset
             def cont(val=None):
                 nonlocal contval
                 if contval is not _unset:
                     raise RuntimeError("coroutine already resumed")
-                if in_driver:
+                if in_step:
                     # cont() invoked from inside suspend_coroutine - just
                     # save the value and let drive_gen pick it up
                     contval = val
                 else:
                     # resume the driver so it can resume the coroutine
-                    _resume(driver, val)
-            in_driver = True
+                    step(val)
+            in_step = True
             if _resume(coro, cont):
                 raise AssertionError("suspend_coroutine stopped")
             if contval is _unset:
-                in_driver = False
-                contval = yield
-            if _resume(coro, contval):
-                # coroutine has completed execution
+                in_step = False
                 break
-    driver = driver_gen()
-    _resume(driver, None)
+    # start executing the coroutine
+    step(None)
