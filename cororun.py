@@ -52,5 +52,5 @@ def _step(coro, contval):
             in_step = False
             return
 
-def launch(coro):
+def start(coro):
     _step(coro, None)

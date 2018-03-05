@@ -14,7 +14,7 @@ async def thread_coro(log):
 
 def test_thread():
     events = []
-    cororun.launch(thread_coro(events.append))
+    cororun.start(thread_coro(events.append))
     assert len(events) == 1
     assert events[0][0] == 'a'
     time.sleep(.2)

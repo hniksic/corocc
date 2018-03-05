@@ -7,7 +7,7 @@ async def null_coro(log):
 
 def test_null():
     events = []
-    cororun.launch(null_coro(events.append))
+    cororun.start(null_coro(events.append))
     assert events == [1]
 
 
@@ -18,7 +18,7 @@ async def simple_coro(log):
 
 def test_simple():
     events = []
-    cororun.launch(simple_coro(events.append))
+    cororun.start(simple_coro(events.append))
     assert events == [1, 2, 'retval']
 
 
@@ -33,7 +33,7 @@ async def unfinished_coro(log, save_cont):
 def test_unfinished():
     events = []
     last_cont = []
-    cororun.launch(unfinished_coro(events.append, last_cont.append))
+    cororun.start(unfinished_coro(events.append, last_cont.append))
     assert events == [1, 2, 3, 4]
     last_cont[0]()
     assert events == [1, 2, 3, 4, 5]
@@ -53,7 +53,7 @@ async def outer(log):
 
 def test_nested():
     events = []
-    cororun.launch(outer(events.append))
+    cororun.start(outer(events.append))
     assert events == ['o 1', 'o 2', 'o 3', 'i 1', 'i 2', 'i 3', 'o 4']
 
 
@@ -70,7 +70,7 @@ async def outer2(log, save_cont):
 def test_nested_unfinished():
     events = []
     last_cont = []
-    cororun.launch(outer2(events.append, last_cont.append))
+    cororun.start(outer2(events.append, last_cont.append))
     assert events == ['o 1', 'i 1', 'i 2']
     last_cont[0]()
     assert events == ['o 1', 'i 1', 'i 2', 'i 3', 'o 2']
@@ -87,7 +87,7 @@ async def cont_again_coro(log, save_cont):
 def test_cont_again():
     events = []
     last_cont = []
-    cororun.launch(cont_again_coro(events.append, last_cont.append))
+    cororun.start(cont_again_coro(events.append, last_cont.append))
     assert events == [1, 2, 3]
     last_cont[0]()
     assert events == [1, 2, 3, 4]

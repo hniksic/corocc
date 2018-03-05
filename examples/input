@@ -41,7 +41,7 @@ async def show_person_data():
 def main():
     w = gtk.Window()
     btn = gtk.Button("Query person...")
-    btn.connect('clicked', lambda _: cororun.launch(show_person_data()))
+    btn.connect('clicked', lambda _: cororun.start(show_person_data()))
     w.add(btn)
     w.connect('destroy', gtk.main_quit)
     w.show_all()
