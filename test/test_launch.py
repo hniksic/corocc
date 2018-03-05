@@ -1,4 +1,15 @@
+import pytest
+
 import cororun
+
+async def null_coro(log):
+    log(1)
+
+def test_null():
+    events = []
+    cororun.launch(null_coro(events.append))
+    assert events == [1]
+
 
 async def simple_coro(log):
     log(1)
@@ -63,3 +74,23 @@ def test_nested_unfinished():
     assert events == ['o 1', 'i 1', 'i 2']
     last_cont[0]()
     assert events == ['o 1', 'i 1', 'i 2', 'i 3', 'o 2']
+
+
+async def cont_again_coro(log, save_cont):
+    log(1)
+    async with cororun.suspending() as cont:
+        log(2)
+        save_cont(cont)
+        log(3)
+    log(4)
+
+def test_cont_again():
+    events = []
+    last_cont = []
+    cororun.launch(cont_again_coro(events.append, last_cont.append))
+    assert events == [1, 2, 3]
+    last_cont[0]()
+    assert events == [1, 2, 3, 4]
+    with pytest.raises(RuntimeError):
+        last_cont[0]()
+    assert events == [1, 2, 3, 4]
