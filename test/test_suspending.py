@@ -22,10 +22,10 @@ async def unfinished_coro(log, save_cont):
 
 def test_unfinished():
     events = []
-    saved_cont = []
-    cororun.start(unfinished_coro(events.append, saved_cont.append))
+    cont_store = []
+    cororun.start(unfinished_coro(events.append, cont_store.append))
     assert events == [1, 2]
-    cont, = saved_cont
+    cont, = cont_store
     assert not hasattr(cont, 'result')
     cont(3)
     assert events == [1, 2, 3]

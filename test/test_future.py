@@ -1,5 +1,7 @@
 import pytest
 
+import threading
+import concurrent.futures
 from concurrent.futures import Future
 
 import cororun
@@ -60,3 +62,22 @@ def test_future_raise_later():
     assert fut.done()
     with pytest.raises(ZeroDivisionError):
         fut.result()
+
+
+async def future_finish_later(log):
+    log(1)
+    async with cororun.suspending() as cont:
+        # continue execution in a different thread
+        threading.Timer(0.01, cont).start()
+    log(2)
+    return 42
+
+def test_future_wait():
+    fut = Future()
+    events = []
+    cororun.start(future_finish_later(events.append), fut)
+    assert not fut.done()
+    assert events == [1]
+    concurrent.futures.wait([fut])
+    assert events == [1, 2]
+    assert fut.result() == 42

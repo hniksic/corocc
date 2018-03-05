@@ -32,10 +32,10 @@ async def unfinished_coro(log, save_cont):
 
 def test_unfinished():
     events = []
-    last_cont = []
-    cororun.start(unfinished_coro(events.append, last_cont.append))
+    cont_store = []
+    cororun.start(unfinished_coro(events.append, cont_store.append))
     assert events == [1, 2, 3, 4]
-    last_cont[0]()
+    cont_store[0]()
     assert events == [1, 2, 3, 4, 5]
 
 
@@ -69,10 +69,10 @@ async def outer2(log, save_cont):
 
 def test_nested_unfinished():
     events = []
-    last_cont = []
-    cororun.start(outer2(events.append, last_cont.append))
+    cont_store = []
+    cororun.start(outer2(events.append, cont_store.append))
     assert events == ['o 1', 'i 1', 'i 2']
-    last_cont[0]()
+    cont_store[0]()
     assert events == ['o 1', 'i 1', 'i 2', 'i 3', 'o 2']
 
 
@@ -86,11 +86,40 @@ async def cont_again_coro(log, save_cont):
 
 def test_cont_again():
     events = []
-    last_cont = []
-    cororun.start(cont_again_coro(events.append, last_cont.append))
+    cont_store = []
+    cororun.start(cont_again_coro(events.append, cont_store.append))
     assert events == [1, 2, 3]
-    last_cont[0]()
+    cont_store[0]()
     assert events == [1, 2, 3, 4]
     with pytest.raises(RuntimeError):
-        last_cont[0]()
+        cont_store[0]()
     assert events == [1, 2, 3, 4]
+
+
+async def raise_now(log):
+    log(1)
+    1/0
+
+def test_raise_now():
+    events = []
+    with pytest.raises(ZeroDivisionError):
+        cororun.start(raise_now(events.append))
+    assert events == [1]
+
+
+async def raise_later(log, save_cont):
+    log(1)
+    async with cororun.suspending() as cont:
+        save_cont(cont)
+    log(2)
+    1/0
+
+def test_raise_later():
+    events = []
+    cont_store = []
+    cororun.start(raise_later(events.append, cont_store.append))
+    assert events == [1]
+    cont = cont_store[0]
+    with pytest.raises(ZeroDivisionError):
+        cont()
+    assert events == [1, 2]
