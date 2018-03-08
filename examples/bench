@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+
+import cororun, time
+
+async def corofn(save):
+    for i in range(3):
+        # suspend and let the caller continue us
+        async with cororun.suspending() as cont:
+            save(cont)
+        # suspend and continue ourselves
+        async with cororun.suspending() as cont:
+            cont()
+    save(None)
+
+def run():
+    store = []
+    cororun.start(corofn(store.append))
+    for i in range(3):
+        store[-1]()
+    assert len(store) == 4 and store[-1] is None
+
+def bench():
+    t0 = time.time()
+    for i in range(100000):
+        run()
+    t1 = time.time()
+    print(t1 - t0)
+
+for i in range(5):
+    bench()
