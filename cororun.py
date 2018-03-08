@@ -41,10 +41,8 @@ def _resume_catching(coro, val, fut):
 _unset = object()
 
 def _step(coro, contval, fut):
-    if fut is None:
-        resume = _resume_simple
-    else:
-        resume = _resume_catching
+    resume = _resume_simple if fut is None else _resume_catching
+
     while True:
         if not resume(coro, contval, fut):
             return
@@ -53,13 +51,12 @@ def _step(coro, contval, fut):
             nonlocal contval
             if contval is not _unset:
                 raise RuntimeError("coroutine already resumed")
-            if in_step:
-                # cont() invoked from inside suspend - just continue
-                # with the current step
-                contval = val
-            else:
+            contval = val
+            if not in_step:
                 # let step resume the coroutine
                 _step(coro, val, fut)
+            # if cont() was invoked from inside suspend, do not step,
+            # just continue with the current step and let it resume
         in_step = True
         if not _resume_simple(coro, cont, None):
             raise AssertionError("suspend didn't yield")
