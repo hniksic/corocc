@@ -96,6 +96,22 @@ def test_cont_again():
     assert events == [1, 2, 3, 4]
 
 
+async def cont_again_now_coro(log):
+    log(1)
+    async with cororun.suspending() as cont:
+        log(2)
+        cont()
+        log(3)
+        cont()
+    log(4)
+
+def test_cont_again():
+    events = []
+    with pytest.raises(RuntimeError):
+        cororun.start(cont_again_now_coro(events.append))
+    assert events == [1, 2, 3]
+
+
 async def raise_now(log):
     log(1)
     1/0
