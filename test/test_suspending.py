@@ -30,3 +30,18 @@ def test_unfinished():
     cont(3)
     assert events == [1, 2, 3]
     assert cont.result == 3
+
+
+async def cont_now(log):
+    log(1)
+    async with cororun.suspending() as cont:
+        log(2)
+        cont()
+        log(3)
+    log(4)
+
+
+def test_cont_now():
+    events = []
+    cororun.start(cont_now(events.append))
+    assert events == [1, 2, 3, 4]
