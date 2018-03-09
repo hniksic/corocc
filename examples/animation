@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+
+import math, random
+import corocc
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk as gtk, Pango as pango, GLib as glib
+
+async def gtk_sleep(delay):
+    async with corocc.suspending() as cont:
+        glib.timeout_add(delay * 1000, cont)
+
+WIDTH, HEIGHT = 20, 20
+
+def set_from_grid(label, grid):
+    def at(pos):
+        opaque = grid.get(pos, 0)
+        if not opaque:
+            return ' '
+        return f'<span alpha="{int((opaque) * 65535)}">\N{BLACK CIRCLE}</span>'
+    label.set_markup('\n'.join(' '.join(at((x, y)) for x in range(WIDTH))
+                               for y in range(HEIGHT)))
+
+async def animate(label):
+    x = int(WIDTH / 2)
+    y = int(HEIGHT / 2)
+    grid = {}
+    while True:
+        # random-walk to new neighboring location
+        newx = (x + random.choice((-1, 0, 1))) % WIDTH
+        newy = (y + random.choice((-1, 0, 1))) % HEIGHT
+        if (newx, newy) == (x, y):
+            continue
+        # gradually fade out of the old location and into the new
+        for i in range(1, 51):
+            grid[x, y] = (50 - i) / 50
+            grid[newx, newy] = i / 50
+            set_from_grid(label, grid)
+            await gtk_sleep(.01)
+        grid.pop((x, y), None)
+        x, y = newx, newy
+
+def main():
+    w = gtk.Window()
+    label = gtk.Label()
+    label.modify_font(pango.FontDescription('monospace 18'))
+    w.add(label)
+    w.show_all()
+    w.connect('destroy', gtk.main_quit)
+    corocc.start(animate(label))
+    gtk.main()
+
+main()
