@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import cororun
+import corocc
 
 import gi
 gi.require_version('Gtk', '3.0')
@@ -14,7 +14,7 @@ async def get_input(label):
     box.pack_start(entry, True, True, 0)
     w.add(box)
     w.show_all()
-    async with cororun.suspending() as cont:
+    async with corocc.suspending() as cont:
         entry.connect('activate', lambda _: cont(entry.get_text()))
         w.connect('delete-event', lambda _: cont(None))
     w.destroy()
@@ -41,7 +41,7 @@ async def show_person_data():
 def main():
     w = gtk.Window()
     btn = gtk.Button("Query person...")
-    btn.connect('clicked', lambda _: cororun.start(show_person_data()))
+    btn.connect('clicked', lambda _: corocc.start(show_person_data()))
     w.add(btn)
     w.connect('destroy', gtk.main_quit)
     w.show_all()

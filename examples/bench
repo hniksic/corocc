@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 
-import cororun, time
+import corocc, time
 
 async def corofn(save):
     for i in range(3):
         # suspend and let the caller continue us
-        async with cororun.suspending() as cont:
+        async with corocc.suspending() as cont:
             save(cont)
         # suspend and continue ourselves
-        async with cororun.suspending() as cont:
+        async with corocc.suspending() as cont:
             cont()
     save(None)
 
 def run():
     store = []
-    cororun.start(corofn(store.append))
+    corocc.start(corofn(store.append))
     for i in range(3):
         store[-1]()
     assert len(store) == 4 and store[-1] is None
