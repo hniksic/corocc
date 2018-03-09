@@ -40,7 +40,7 @@ def _resume_catching(coro, val, fut):
         return False
     return True
 
-def _step(coro, contval, fut):
+def _step(coro, contval, fut, start_ctx):
     resume = _resume_simple if fut is None else _resume_catching
 
     while True:
@@ -56,9 +56,10 @@ def _step(coro, contval, fut):
             contval = val
             if not in_step:
                 # resume the coroutine with the provided value
-                _step(coro, val, fut)
+                _step(coro, val, fut, start_ctx)
             # if cont() was invoked from inside suspend, do not step,
             # just continue with the current step and resume there
+        cont.start_ctx = start_ctx
 
         in_step = True
         if not _resume_simple(coro, cont, None):
@@ -67,5 +68,5 @@ def _step(coro, contval, fut):
             in_step = False
             return
 
-def start(coro, future=None):
-    _step(coro, None, future)
+def start(coro, *, future=None, ctx=None):
+    _step(coro, None, future, ctx)

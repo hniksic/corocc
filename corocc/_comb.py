@@ -26,7 +26,7 @@ async def gather(*coros):
                 cont()
         for coro in coros:
             fut = _make_future()
-            start(coro, fut)
+            start(coro, future=fut)
             fut._coro = coro
             fut.add_done_callback(on_done)
     return [results[coro] for coro in coros]
