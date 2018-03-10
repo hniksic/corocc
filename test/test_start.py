@@ -186,7 +186,7 @@ def test_send_exc():
     corocc.start(send_exc_coro(events.append, cont_store.append))
     assert events == [1, 2]
     cont = cont_store.pop()
-    cont.exc(ZeroDivisionError())
+    cont.throw(ZeroDivisionError())
     assert events == [1, 2, 4, 7]
     cont = cont_store.pop()
     cont()

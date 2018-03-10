@@ -76,13 +76,14 @@ class Continuation:
             self._contval = val
             self._coro_deliver = coro.send
 
-    def exc(self, e):
+    def throw(self, e):
+        # Almost-pasted implementation of __call__ for efficiency of
+        # __call__ invocation.
         if self._invoked:
             raise RuntimeError("coroutine already resumed")
         self._invoked = True
         coro = self._coro
         if self._can_resume:
-            # resume the coroutine with the provided value
             _step(coro, coro.throw, e, self._fut, self.start_data)
         else:
             self._contval = e
