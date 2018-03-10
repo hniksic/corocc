@@ -19,7 +19,11 @@ class suspending:
         return cont
 
     @types.coroutine
-    def __aexit__(self, *_):
+    def __aexit__(self, _t, v, _tb):
+        # if there is an exception, raise it immediately, don't wait
+        # until resumption
+        if v is not None:
+            raise v
         self._cont.result = yield
 
 def _resume_simple(coro, val, _):
@@ -48,11 +52,11 @@ def _step(coro, contval, fut, start_ctx):
             return
 
         cont_invoked = [False]
-        def cont(val=None, _invoked=cont_invoked):
+        def cont(val=None, __invoked=cont_invoked):
             nonlocal contval
-            if cont_invoked[0]:
+            if __invoked[0]:
                 raise RuntimeError("coroutine already resumed")
-            cont_invoked[0] = True
+            __invoked[0] = True
             contval = val
             if not in_step:
                 # resume the coroutine with the provided value

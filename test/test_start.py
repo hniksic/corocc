@@ -112,21 +112,21 @@ def test_cont_again_now():
     assert events == [1, 2, 3]
 
 
-# async def different_cont_again_coro(log):
-#     log(1)
-#     async with corocc.suspending() as cont1:
-#         log(2)
-#         cont1()
-#     async with corocc.suspending() as cont2:
-#         log(3)
-#         cont1()
-#     log(4)
+async def different_cont_again_coro(log):
+    log(1)
+    async with corocc.suspending() as cont1:
+        log(2)
+        cont1()  # first call, ok
+    async with corocc.suspending() as cont2:
+        log(3)
+        cont1()  # calling cont1() again, must raise
+    log(4)
 
-# def test_different_cont_again():
-#     events = []
-#     with pytest.raises(RuntimeError):
-#         corocc.start(different_cont_again_coro(events.append))
-#     assert events == [1, 2, 3]
+def test_different_cont_again():
+    events = []
+    with pytest.raises(RuntimeError):
+        corocc.start(different_cont_again_coro(events.append))
+    assert events == [1, 2, 3]
 
 
 async def raise_now(log):
