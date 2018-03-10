@@ -26,16 +26,16 @@ class suspending:
             raise v
         self._cont.result = yield
 
-def _resume_simple(coro, val, _):
+def _resume_simple(coro_deliver, val, _):
     try:
-        coro.send(val)
+        coro_deliver(val)
         return True
     except StopIteration:
         return False
 
-def _resume_catching(coro, val, fut):
+def _resume_catching(coro_deliver, val, fut):
     try:
-        result = coro.send(val)
+        coro_deliver(val)
     except StopIteration as e:
         fut.set_result(e.value)
         return False
@@ -44,27 +44,44 @@ def _resume_catching(coro, val, fut):
         return False
     return True
 
+
 class Continuation:
     # using __slots__ actually makes a noticable impact on performance
     __slots__ = ('_invoked', '_can_resume', '_coro', '_fut', 'start_ctx',
-                 '_contval', 'result')
+                 '_contval', '_coro_deliver', 'result')
 
     def __call__(self, val=None):
         if self._invoked:
             raise RuntimeError("coroutine already resumed")
         self._invoked = True
-        self._contval = val
+        coro = self._coro
         if self._can_resume:
             # resume the coroutine with the provided value
-            _step(self._coro, val, self._fut, self.start_ctx)
-        # if cont() was invoked from inside suspend, do not step,
-        # just continue with the current step and resume there
+            _step(coro, coro.send, val, self._fut, self.start_ctx)
+        else:
+            # if cont() was invoked from inside suspend, do not step,
+            # just continue with the current step and resume there
+            self._contval = val
+            self._coro_deliver = coro.send
 
-def _step(coro, contval, fut, start_ctx):
+    def exc(self, e):
+        if self._invoked:
+            raise RuntimeError("coroutine already resumed")
+        self._invoked = True
+        coro = self._coro
+        if self._can_resume:
+            # resume the coroutine with the provided value
+            _step(coro, coro.throw, e, self._fut, self.start_ctx)
+        else:
+            self._contval = e
+            self._coro_deliver = coro.throw
+
+
+def _step(coro, coro_deliver, contval, fut, start_ctx):
     resume = _resume_simple if fut is None else _resume_catching
 
     while True:
-        if not resume(coro, contval, fut):
+        if not resume(coro_deliver, contval, fut):
             return
 
         cont = Continuation()
@@ -76,12 +93,13 @@ def _step(coro, contval, fut, start_ctx):
         # prevent Continuation from trying to resume the coroutine
         # while still running
         cont._can_resume = False
-        if not _resume_simple(coro, cont, None):
+        if not _resume_simple(coro.send, cont, None):
             raise AssertionError("suspend didn't yield")
         if not cont._invoked:
             cont._can_resume = True
             return
         contval = cont._contval
+        coro_deliver = cont._coro_deliver
 
 def start(coro, *, future=None, ctx=None):
-    _step(coro, None, future, ctx)
+    _step(coro, coro.send, None, future, ctx)

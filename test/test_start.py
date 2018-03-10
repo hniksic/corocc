@@ -35,7 +35,8 @@ def test_unfinished():
     cont_store = []
     corocc.start(unfinished_coro(events.append, cont_store.append))
     assert events == [1, 2, 3, 4]
-    cont_store[0]()
+    cont, = cont_store
+    cont()
     assert events == [1, 2, 3, 4, 5]
 
 
@@ -72,7 +73,8 @@ def test_nested_unfinished():
     cont_store = []
     corocc.start(outer2(events.append, cont_store.append))
     assert events == ['o 1', 'i 1', 'i 2']
-    cont_store[0]()
+    cont, = cont_store
+    cont()
     assert events == ['o 1', 'i 1', 'i 2', 'i 3', 'o 2']
 
 
@@ -89,10 +91,11 @@ def test_cont_again():
     cont_store = []
     corocc.start(cont_again_coro(events.append, cont_store.append))
     assert events == [1, 2, 3]
-    cont_store[0]()
+    cont, = cont_store
+    cont()
     assert events == [1, 2, 3, 4]
     with pytest.raises(RuntimeError):
-        cont_store[0]()
+        cont()
     assert events == [1, 2, 3, 4]
 
 
@@ -152,7 +155,39 @@ def test_raise_later():
     cont_store = []
     corocc.start(raise_later(events.append, cont_store.append))
     assert events == [1]
-    cont = cont_store[0]
+    cont, = cont_store
     with pytest.raises(ZeroDivisionError):
         cont()
     assert events == [1, 2]
+
+
+async def send_exc_coro(log, save_cont):
+    log(1)
+    try:
+        async with corocc.suspending() as cont:
+            log(2)
+            save_cont(cont)
+        log(3)
+    except ZeroDivisionError:
+        log(4)
+    except:
+        log(5)
+    else:
+        log(6)
+    log(7)
+    async with corocc.suspending() as cont:
+        save_cont(cont)
+    log(8)
+
+
+def test_send_exc():
+    events = []
+    cont_store = []
+    corocc.start(send_exc_coro(events.append, cont_store.append))
+    assert events == [1, 2]
+    cont = cont_store.pop()
+    cont.exc(ZeroDivisionError())
+    assert events == [1, 2, 4, 7]
+    cont = cont_store.pop()
+    cont()
+    assert events == [1, 2, 4, 7, 8]
