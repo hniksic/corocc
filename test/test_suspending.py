@@ -1,3 +1,5 @@
+import pytest
+
 import corocc
 
 async def simple_coro(log):
@@ -45,3 +47,20 @@ def test_cont_now():
     events = []
     corocc.start(cont_now(events.append))
     assert events == [1, 2, 3, 4]
+
+
+async def nested_suspending(log):
+    log(1)
+    async with corocc.suspending():
+        log(2)
+        async with corocc.suspending():
+            log(3)
+        log(4)
+    log(5)
+
+
+def test_nested_suspending():
+    events = []
+    with pytest.raises(RuntimeError):
+        corocc.start(nested_suspending(events.append))
+    assert events == [1, 2]

@@ -2,9 +2,11 @@ import types
 
 __all__ = 'suspend', 'suspending', 'start', 'Continuation',
 
+_CONT_REQUEST = object()
+
 @types.coroutine
 def suspend(fn, *args):
-    cont = yield
+    cont = yield _CONT_REQUEST
     fn(cont, *args)
     cont_retval = yield
     return cont_retval
@@ -14,7 +16,7 @@ class suspending:
 
     @types.coroutine
     def __aenter__(self):
-        cont = yield
+        cont = yield _CONT_REQUEST
         self._cont = cont
         return cont
 
@@ -43,6 +45,16 @@ def _resume_catching(coro_deliver, val, fut):
         fut.set_exception(e)
         return False
     return True
+
+
+def _resume_with_cont(coro, cont):
+    try:
+        ret = coro.send(cont)
+    except StopIteration:
+        raise AssertionError("suspend didn't yield")
+    if ret is _CONT_REQUEST:
+        raise RuntimeError("nested suspending() inside in the same coroutine "
+                           "is not allowed")
 
 
 class Continuation:
@@ -93,8 +105,7 @@ def _step(coro, coro_deliver, contval, fut, start_ctx):
         # prevent Continuation from trying to resume the coroutine
         # while still running
         cont._can_resume = False
-        if not _resume_simple(coro.send, cont, None):
-            raise AssertionError("suspend didn't yield")
+        _resume_with_cont(coro, cont)
         if not cont._invoked:
             cont._can_resume = True
             return
