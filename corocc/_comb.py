@@ -13,6 +13,10 @@ def _make_future():
     return _Future()
 
 async def gather(*coros):
+    """A coroutine aggregating results from the given coroutines.
+    Once all the coroutines have completed, this coroutine returns a list of
+    their results, given in the same order as the coroutines.
+    """
     if not coros:
         return []
     results = {}

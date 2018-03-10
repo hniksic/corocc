@@ -6,12 +6,20 @@ _CONT_REQUEST = object()
 
 @types.coroutine
 def suspend(fn, *args):
+    """Suspend the currently running coroutine and invoke FN with the continuation."""
     cont = yield _CONT_REQUEST
     fn(cont, *args)
     cont_retval = yield
     return cont_retval
 
 class suspending:
+    """Provide the continuation to the code entering the context manager:
+
+    async with corocc.suspending() as cont:
+        ... # store cont somewhere, or call it
+        # suspension happens at this point
+    """
+
     __slots__ = ('_cont',)
 
     @types.coroutine
@@ -114,4 +122,8 @@ def _step(coro, coro_deliver, contval, fut, start_data):
         coro_deliver = cont._coro_deliver
 
 def start(coro, *, future=None, data=None):
+    """
+    Start executing CORO, allowing it to suspend itself and continue
+    execution.
+    """
     _step(coro, coro.send, None, future, data)
