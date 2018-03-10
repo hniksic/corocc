@@ -34,9 +34,10 @@ def generator(corofn):
 yield_ = GenImpl._yield
 
 
-@generator
-async def sample():
-    await yield_(1)
-    await yield_(2)
+if __name__ == '__main__':
+    @generator
+    async def sample():
+        await yield_(1)
+        await yield_(2)
 
-print(list(sample()))
+    print(list(sample()))
