@@ -59,7 +59,7 @@ def _resume_with_cont(coro, cont):
 
 class Continuation:
     # using __slots__ actually makes a noticable impact on performance
-    __slots__ = ('_invoked', '_can_resume', '_coro', '_fut', 'start_ctx',
+    __slots__ = ('_invoked', '_can_resume', '_coro', '_fut', 'start_data',
                  '_contval', '_coro_deliver', 'result')
 
     def __call__(self, val=None):
@@ -69,7 +69,7 @@ class Continuation:
         coro = self._coro
         if self._can_resume:
             # resume the coroutine with the provided value
-            _step(coro, coro.send, val, self._fut, self.start_ctx)
+            _step(coro, coro.send, val, self._fut, self.start_data)
         else:
             # if cont() was invoked from inside suspend, do not step,
             # just continue with the current step and resume there
@@ -83,13 +83,13 @@ class Continuation:
         coro = self._coro
         if self._can_resume:
             # resume the coroutine with the provided value
-            _step(coro, coro.throw, e, self._fut, self.start_ctx)
+            _step(coro, coro.throw, e, self._fut, self.start_data)
         else:
             self._contval = e
             self._coro_deliver = coro.throw
 
 
-def _step(coro, coro_deliver, contval, fut, start_ctx):
+def _step(coro, coro_deliver, contval, fut, start_data):
     resume = _resume_simple if fut is None else _resume_catching
 
     while True:
@@ -98,10 +98,10 @@ def _step(coro, coro_deliver, contval, fut, start_ctx):
 
         cont = Continuation()
         cont._invoked = False
-        cont.start_ctx = start_ctx
+        cont.start_data = start_data
         cont._coro = coro
         cont._fut = fut
-        cont.start_ctx = start_ctx
+        cont.start_data = start_data
         # prevent Continuation from trying to resume the coroutine
         # while still running
         cont._can_resume = False
@@ -112,5 +112,5 @@ def _step(coro, coro_deliver, contval, fut, start_ctx):
         contval = cont._contval
         coro_deliver = cont._coro_deliver
 
-def start(coro, *, future=None, ctx=None):
-    _step(coro, coro.send, None, future, ctx)
+def start(coro, *, future=None, data=None):
+    _step(coro, coro.send, None, future, data)

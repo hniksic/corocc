@@ -19,7 +19,7 @@ class GenImpl:
     @staticmethod
     async def _yield(val):
         async with corocc.suspending() as cont:
-            self = cont.start_ctx
+            self = cont.start_data
             self._nextval = val
             self._cont = cont
 
@@ -27,7 +27,7 @@ def generator(corofn):
     def impl(*args, **kwds):
         gen = GenImpl()
         coro = corofn(*args, **kwds)
-        gen._cont = lambda: corocc.start(coro, ctx=gen)
+        gen._cont = lambda: corocc.start(coro, data=gen)
         return gen
     return impl
 
