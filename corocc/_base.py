@@ -49,51 +49,44 @@ class Continuation:
     __slots__ = ('_driver', '_invoked_in', '_contval', '_coro_deliver',
                  'result')
 
-    def __call__(self, value=None):
-        """Continue the coroutine with the provided value, or None."""
+    def __cont(self, val, coro_deliver):
+        # Continue the coroutine, or store the intended continuation value and
+        # let the caller continue it.  coro_deliver is coro.send if the
+        # coroutine resumes normally, or coro.throw if it resumes with an
+        # exception.
         if self._invoked_in is not None:
             raise RuntimeError("coroutine already resumed")
         here = threading.current_thread()
         self._invoked_in = here
         driver = self._driver
-        if driver._step_thread is not here:
+        if driver.step_thread is not here:
             # resume the coroutine with the provided value
             while driver.coro_running:
                 time.sleep(.0001)
-            driver.step(driver.coro.send, value)
+            driver.step(coro_deliver, val)
         else:
             # if cont() was invoked from inside suspend, do not step,
-            # just continue with the current step and resume there
-            self._contval = value
-            self._coro_deliver = driver.coro.send
+            # just return to the current step and let it resume
+            self._contval = val
+            self._coro_deliver = coro_deliver
 
-    def throw(self, e):
+    def __call__(self, value=None, __cont=__cont):
+        """Continue the coroutine with the provided value, or None."""
+        __cont(self, value, self._driver.coro_send)
+
+    def throw(self, e, __cont=__cont):
         """Continue the coroutine with the provided exception."""
-        # Almost-pasted implementation of __call__ for efficiency of
-        # __call__ invocation.
-        if self._invoked_in is not None:
-            raise RuntimeError("coroutine already resumed")
-        here = threading.current_thread()
-        self._invoked_in = here
-        driver = self._driver
-        if driver._step_thread is not here:
-            while driver.coro_running:
-                time.sleep(.0001)
-            driver.step(driver.coro.throw, e)
-        else:
-            self._contval = e
-            self._coro_deliver = driver.coro.throw
+        __cont(self, e, self._driver.coro_throw)
 
 
 class _Driver:
-    __slots__ = ('coro', 'future', 'start_data', 'resumefn', 'coro_running',
-                 '_step_thread')
+    __slots__ = ('coro', 'coro_send', 'coro_throw', 'resumefn',
+                 'future', 'start_data', 'coro_running', 'step_thread')
 
     def step(self, coro_deliver, contval):
         # Run a step of the coroutine, i.e. execute it until a suspension or
         # completion, whichever happens first.
-        here = self._step_thread = threading.current_thread()
-        coro = self.coro
+        here = self.step_thread = threading.current_thread()
 
         while True:
             if not self.resumefn(coro_deliver, contval):
@@ -102,14 +95,14 @@ class _Driver:
             cont = Continuation()
             cont._driver = self
             cont._invoked_in = None
-            self._resume_with_cont(coro, cont)
+            self._resume_with_cont(cont)
             if cont._invoked_in is not here:
                 # The continuation was not invoked, or was invoked in a
                 # different thread.  This step is done, it's now up to cont to
-                # call us again.  Set _step_thread to a non-thread value, so
+                # call us again.  Set step_thread to a non-thread value, so
                 # that cont knows it has to call step() regardless of which
                 # thread it's invoked in.
-                self._step_thread = None
+                self.step_thread = None
                 return
 
             # The continuation was invoked immediately, so the suspension
@@ -118,10 +111,10 @@ class _Driver:
             contval = cont._contval
             coro_deliver = cont._coro_deliver
 
-    def _resume_with_cont(self, coro, cont):
+    def _resume_with_cont(self, cont):
         self.coro_running = True
         try:
-            ret = coro.send(cont)
+            ret = self.coro_send(cont)
         except StopIteration:
             raise AssertionError("suspend didn't yield")
         finally:
@@ -166,6 +159,9 @@ def start(coro, *, future=None, data=None):
     """
     d = _Driver()
     d.coro = coro
+    # cached for efficiency
+    d.coro_send = coro.send
+    d.coro_throw = coro.throw
     d.future = future
     d.start_data = data
     if future is None:
