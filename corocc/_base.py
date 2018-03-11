@@ -90,12 +90,13 @@ class _Driver:
                  '_step_thread')
 
     def step(self, coro_deliver, contval):
+        # Run a step of the coroutine, i.e. execute it until a suspension or
+        # completion, whichever happens first.
         here = self._step_thread = threading.current_thread()
-        future = self.future
         coro = self.coro
 
         while True:
-            if not self.resumefn(coro_deliver, contval, future):
+            if not self.resumefn(coro_deliver, contval):
                 return
 
             cont = Continuation()
@@ -104,14 +105,16 @@ class _Driver:
             self._resume_with_cont(coro, cont)
             if cont._invoked_in is not here:
                 # The continuation was not invoked, or was invoked in a
-                # different thread.  Our job is done for this iteration, the
-                # continuation will call us again.  Set _step_thread to
-                # something that is not a thread, so that the continuation
-                # always calls step().
+                # different thread.  This step is done, it's now up to cont to
+                # call us again.  Set _step_thread to a non-thread value, so
+                # that cont knows it has to call step() regardless of which
+                # thread it's invoked in.
                 self._step_thread = None
                 return
+
             # The continuation was invoked immediately, so the suspension
-            # didn't really happen.  Continue.
+            # didn't really happen.  Resume the coroutine with the provided
+            # value.
             contval = cont._contval
             coro_deliver = cont._coro_deliver
 
@@ -127,6 +130,34 @@ class _Driver:
             raise RuntimeError("nested suspending() inside in the same coroutine "
                                "is not allowed")
 
+    @staticmethod
+    def resume_simple(coro_deliver, val):
+        # Resume the coroutine with VAL.  coro_deliver is either
+        # self._coro.send or self._coro.throw.
+        #
+        # Return whether the coroutine can be further invoked, i.e. false if
+        # completed.  Coroutine's result is ignored and exceptions raised by
+        # the coroutine are propagated to the caller.
+        try:
+            coro_deliver(val)
+            return True
+        except StopIteration:
+            return False
+
+    def resume_catching(self, coro_deliver, val):
+        # Like resume_simple, but if the coroutine completes, store result
+        # into self.future.  If the coroutine execution raises, store
+        # exception into self.future.
+        try:
+            coro_deliver(val)
+        except StopIteration as e:
+            self.future.set_result(e.value)
+            return False
+        except Exception as e:
+            self.future.set_exception(e)
+            return False
+        return True
+
 
 def start(coro, *, future=None, data=None):
     """
@@ -138,8 +169,8 @@ def start(coro, *, future=None, data=None):
     d.future = future
     d.start_data = data
     if future is None:
-        d.resumefn = _resume_simple
+        d.resumefn = d.resume_simple
     else:
-        d.resumefn = _resume_catching
+        d.resumefn = d.resume_catching
     d.coro_running = False
     d.step(coro.send, None)

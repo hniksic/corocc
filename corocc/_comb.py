@@ -76,31 +76,31 @@ async def wait(coros_or_futures, return_when=ALL_COMPLETED):
     finished = False
     future_impl = _get_future_impl()
 
+    def on_done(fut):
+        nonlocal finished
+        if finished:
+            return
+
+        pending.remove(fut)
+        done.add(fut)
+        if not pending:
+            finished = True
+            cont()
+            return
+
+        if return_when == 'FIRST_EXCEPTION':
+            try:
+                fut.result()
+            except Exception:
+                finished = True
+                cont()
+                return
+
+        if return_when == 'FIRST_COMPLETED':
+            finished = True
+            cont()
+
     async with suspending() as cont:
-        def on_done(fut):
-            nonlocal finished
-            if finished:
-                return
-
-            pending.remove(fut)
-            done.add(fut)
-            if not pending:
-                finished = True
-                cont()
-                return
-
-            if return_when == 'FIRST_EXCEPTION':
-                try:
-                    fut.result()
-                except Exception:
-                    finished = True
-                    cont()
-                    return
-
-            if return_when == 'FIRST_COMPLETED':
-                finished = True
-                cont()
-
         for fut in coros_or_futures:
             if not isinstance(fut, future_impl):
                 new_fut = future_impl()
