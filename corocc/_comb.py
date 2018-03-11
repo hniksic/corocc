@@ -73,18 +73,27 @@ async def wait(coros_or_futures, return_when=ALL_COMPLETED):
     """
     pending = set()
     done = set()
+
     finished = False
+    finished_mutex = threading.Lock()
+    def set_finished():
+        nonlocal finished
+        with finished_mutex:
+            prev_finished = finished
+            finished = True
+        return prev_finished
+
     future_impl = _get_future_impl()
 
     def on_done(fut):
-        nonlocal finished
         if finished:
             return
 
         pending.remove(fut)
         done.add(fut)
         if not pending:
-            finished = True
+            if set_finished():
+                return
             cont()
             return
 
@@ -92,12 +101,14 @@ async def wait(coros_or_futures, return_when=ALL_COMPLETED):
             try:
                 fut.result()
             except Exception:
-                finished = True
+                if set_finished():
+                    return
                 cont()
                 return
 
         if return_when == 'FIRST_COMPLETED':
-            finished = True
+            if set_finished():
+                return
             cont()
 
     async with suspending() as cont:
