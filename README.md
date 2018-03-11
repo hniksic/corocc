@@ -7,6 +7,9 @@ This is useful for integrating coroutines with environments that can't
 run a full PEP 3156 event loop, but that still provide support for
 executing callbacks.
 
+See [the blog post](https://morestina.net/blog/1253/continuations) for
+additional details.
+
 ## Examples:
 
 An equivalent of `asyncio.sleep()` which continues the current
