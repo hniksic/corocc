@@ -38,31 +38,19 @@ class suspending:
             raise v
         self._cont.result = yield
 
-def _resume_simple(coro_deliver, val, _):
-    try:
-        coro_deliver(val)
-        return True
-    except StopIteration:
-        return False
-
-def _resume_catching(coro_deliver, val, fut):
-    try:
-        coro_deliver(val)
-    except StopIteration as e:
-        fut.set_result(e.value)
-        return False
-    except Exception as e:
-        fut.set_exception(e)
-        return False
-    return True
-
 
 class Continuation:
+    """
+    Object that can be invoked to continue a suspended coroutine.
+    Continuations are one-shot, invoking a continuation more than once
+    results in a RuntimeError.
+    """
     # using __slots__ actually makes a noticable impact on performance
     __slots__ = ('_driver', '_invoked_in', '_contval', '_coro_deliver',
                  'result')
 
     def __call__(self, value=None):
+        """Continue the coroutine with the provided value, or None."""
         if self._invoked_in is not None:
             raise RuntimeError("coroutine already resumed")
         here = threading.current_thread()
@@ -80,6 +68,7 @@ class Continuation:
             self._coro_deliver = driver.coro.send
 
     def throw(self, e):
+        """Continue the coroutine with the provided exception."""
         # Almost-pasted implementation of __call__ for efficiency of
         # __call__ invocation.
         if self._invoked_in is not None:
