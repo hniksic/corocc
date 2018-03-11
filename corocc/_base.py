@@ -15,11 +15,14 @@ def suspend(fn, *args):
     return cont_retval
 
 class suspending:
-    """Provide the continuation to the code entering the context manager:
+    """Provide continuation to the code entering the context manager,
+    and suspend on exit.
 
     async with corocc.suspending() as cont:
         ... # store cont somewhere, or call it
+        # if cont() was not invoked inside the async with block,
         # suspension happens at this point
+    # invocation of cont() resumes coroutine here.
     """
 
     __slots__ = ('_cont',)
