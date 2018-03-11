@@ -1,4 +1,5 @@
 import types
+import threading
 
 __all__ = 'suspend', 'suspending', 'start', 'Continuation',
 
@@ -67,16 +68,18 @@ def _resume_with_cont(coro, cont):
 
 class Continuation:
     # using __slots__ actually makes a noticable impact on performance
-    __slots__ = ('_invoked', '_can_resume', '_coro', '_fut', 'start_data',
+    __slots__ = ('_invoked_in', '_resumed', '_step_thread', '_coro', '_fut', 'start_data',
                  '_contval', '_coro_deliver', 'result')
 
     def __call__(self, val=None):
-        if self._invoked:
+        if self._invoked_in is not None:
             raise RuntimeError("coroutine already resumed")
-        self._invoked = True
+        here = threading.current_thread()
+        self._invoked_in = here
         coro = self._coro
-        if self._can_resume:
+        if self._step_thread is not here:
             # resume the coroutine with the provided value
+            self._resumed.wait()
             _step(coro, coro.send, val, self._fut, self.start_data)
         else:
             # if cont() was invoked from inside suspend, do not step,
@@ -87,11 +90,12 @@ class Continuation:
     def throw(self, e):
         # Almost-pasted implementation of __call__ for efficiency of
         # __call__ invocation.
-        if self._invoked:
+        if self._invoked_in is not None:
             raise RuntimeError("coroutine already resumed")
-        self._invoked = True
+        here = threading.current_thread()
+        self._invoked_in = here
         coro = self._coro
-        if self._can_resume:
+        if self._step_thread is not here:
             _step(coro, coro.throw, e, self._fut, self.start_data)
         else:
             self._contval = e
@@ -100,23 +104,26 @@ class Continuation:
 
 def _step(coro, coro_deliver, contval, fut, start_data):
     resume = _resume_simple if fut is None else _resume_catching
+    here = threading.current_thread()
 
     while True:
         if not resume(coro_deliver, contval, fut):
             return
 
         cont = Continuation()
-        cont._invoked = False
+        cont._invoked_in = None
         cont.start_data = start_data
         cont._coro = coro
         cont._fut = fut
         cont.start_data = start_data
         # prevent Continuation from trying to resume the coroutine
         # while still running
-        cont._can_resume = False
+        cont._step_thread = here
+        cont._resumed = threading.Event()
         _resume_with_cont(coro, cont)
-        if not cont._invoked:
-            cont._can_resume = True
+        cont._resumed.set()
+        if cont._invoked_in is not here:
+            cont._step_thread = None
             return
         contval = cont._contval
         coro_deliver = cont._coro_deliver
