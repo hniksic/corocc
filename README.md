@@ -43,6 +43,6 @@ async def sleep(delay):
 
 ## License
 
-`subprocess` is distributed under the terms of the MIT license, see
+`corocc` is distributed under the terms of the MIT license, see
 [LICENSE-MIT](LICENSE-MIT) for details.  Contributing changes is
 assumed to signal agreement with these licensing terms.
