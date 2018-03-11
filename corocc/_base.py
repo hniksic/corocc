@@ -1,5 +1,6 @@
 import types
 import threading
+import time
 
 __all__ = 'suspend', 'suspending', 'start', 'Continuation',
 
@@ -56,36 +57,27 @@ def _resume_catching(coro_deliver, val, fut):
     return True
 
 
-def _resume_with_cont(coro, cont):
-    try:
-        ret = coro.send(cont)
-    except StopIteration:
-        raise AssertionError("suspend didn't yield")
-    if ret is _CONT_REQUEST:
-        raise RuntimeError("nested suspending() inside in the same coroutine "
-                           "is not allowed")
-
-
 class Continuation:
     # using __slots__ actually makes a noticable impact on performance
-    __slots__ = ('_invoked_in', '_resumed', '_step_thread', '_coro', '_fut', 'start_data',
-                 '_contval', '_coro_deliver', 'result')
+    __slots__ = ('_driver', '_invoked_in', '_contval', '_coro_deliver',
+                 'result')
 
-    def __call__(self, val=None):
+    def __call__(self, value=None):
         if self._invoked_in is not None:
             raise RuntimeError("coroutine already resumed")
         here = threading.current_thread()
         self._invoked_in = here
-        coro = self._coro
-        if self._step_thread is not here:
+        driver = self._driver
+        if driver._step_thread is not here:
             # resume the coroutine with the provided value
-            self._resumed.wait()
-            _step(coro, coro.send, val, self._fut, self.start_data)
+            while driver.coro_running:
+                time.sleep(.0001)
+            driver.step(driver.coro.send, value)
         else:
             # if cont() was invoked from inside suspend, do not step,
             # just continue with the current step and resume there
-            self._contval = val
-            self._coro_deliver = coro.send
+            self._contval = value
+            self._coro_deliver = driver.coro.send
 
     def throw(self, e):
         # Almost-pasted implementation of __call__ for efficiency of
@@ -94,43 +86,71 @@ class Continuation:
             raise RuntimeError("coroutine already resumed")
         here = threading.current_thread()
         self._invoked_in = here
-        coro = self._coro
-        if self._step_thread is not here:
-            _step(coro, coro.throw, e, self._fut, self.start_data)
+        driver = self._driver
+        if driver._step_thread is not here:
+            while driver.coro_running:
+                time.sleep(.0001)
+            driver.step(driver.coro.throw, e)
         else:
             self._contval = e
-            self._coro_deliver = coro.throw
+            self._coro_deliver = driver.coro.throw
 
 
-def _step(coro, coro_deliver, contval, fut, start_data):
-    resume = _resume_simple if fut is None else _resume_catching
-    here = threading.current_thread()
+class _Driver:
+    __slots__ = ('coro', 'future', 'start_data', 'resumefn', 'coro_running',
+                 '_step_thread')
 
-    while True:
-        if not resume(coro_deliver, contval, fut):
-            return
+    def step(self, coro_deliver, contval):
+        here = self._step_thread = threading.current_thread()
+        future = self.future
+        coro = self.coro
 
-        cont = Continuation()
-        cont._invoked_in = None
-        cont.start_data = start_data
-        cont._coro = coro
-        cont._fut = fut
-        cont.start_data = start_data
-        # prevent Continuation from trying to resume the coroutine
-        # while still running
-        cont._step_thread = here
-        cont._resumed = threading.Event()
-        _resume_with_cont(coro, cont)
-        cont._resumed.set()
-        if cont._invoked_in is not here:
-            cont._step_thread = None
-            return
-        contval = cont._contval
-        coro_deliver = cont._coro_deliver
+        while True:
+            if not self.resumefn(coro_deliver, contval, future):
+                return
+
+            cont = Continuation()
+            cont._driver = self
+            cont._invoked_in = None
+            self._resume_with_cont(coro, cont)
+            if cont._invoked_in is not here:
+                # The continuation was not invoked, or was invoked in a
+                # different thread.  Our job is done for this iteration, the
+                # continuation will call us again.  Set _step_thread to
+                # something that is not a thread, so that the continuation
+                # always calls step().
+                self._step_thread = None
+                return
+            # The continuation was invoked immediately, so the suspension
+            # didn't really happen.  Continue.
+            contval = cont._contval
+            coro_deliver = cont._coro_deliver
+
+    def _resume_with_cont(self, coro, cont):
+        self.coro_running = True
+        try:
+            ret = coro.send(cont)
+        except StopIteration:
+            raise AssertionError("suspend didn't yield")
+        finally:
+            self.coro_running = False
+        if ret is _CONT_REQUEST:
+            raise RuntimeError("nested suspending() inside in the same coroutine "
+                               "is not allowed")
+
 
 def start(coro, *, future=None, data=None):
     """
     Start executing CORO, allowing it to suspend itself and continue
     execution.
     """
-    _step(coro, coro.send, None, future, data)
+    d = _Driver()
+    d.coro = coro
+    d.future = future
+    d.start_data = data
+    if future is None:
+        d.resumefn = _resume_simple
+    else:
+        d.resumefn = _resume_catching
+    d.coro_running = False
+    d.step(coro.send, None)
